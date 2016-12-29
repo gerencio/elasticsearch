@@ -75,6 +75,14 @@ setup_personality() {
         OPTS="$OPTS -E node.master=true -E node.data=false"
         ;;
 
+      MASTER_DATA)
+        OPTS="$OPTS -E node.master=true -E node.data=true -E node.injest=false"
+        ;;
+
+      MASTER_DATA_GATEWAY)
+        OPTS="$OPTS -E node.master=true -E node.data=true -E node.injest=true"
+        ;;
+
       GATEWAY)
         OPTS="$OPTS -E node.master=false -E node.data=false"
         ;;
@@ -84,7 +92,7 @@ setup_personality() {
         ;;
 
       *)
-        echo "Unknown node type. Please use MASTER|GATEWAY|DATA|NON_MASTER"
+        echo "Unknown node type. Please use MASTER|GATEWAY|DATA|NON_MASTER|MASTER_DATA|MASTER_DATA_GATEWAY"
         exit 1
     esac
   fi
