@@ -76,13 +76,8 @@ setup_personality() {
         ;;
 
       MASTER_DATA)
-        OPTS="$OPTS -E node.master=true -E node.data=true -E node.injest=false"
+        OPTS="$OPTS -E node.master=true -E node.data=true"
         ;;
-
-      MASTER_DATA_GATEWAY)
-        OPTS="$OPTS -E node.master=true -E node.data=true -E node.injest=true"
-        ;;
-
       GATEWAY)
         OPTS="$OPTS -E node.master=false -E node.data=false"
         ;;
