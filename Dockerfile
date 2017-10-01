@@ -1,14 +1,13 @@
 FROM java:8u92-jre-alpine
 
-MAINTAINER gerencio
-
 RUN apk -U add bash bc
 
 ENV ES_VERSION=5.6.2
 
-ADD https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-$ES_VERSION.tar.gz /tmp/es
-RUN cd /usr/share && \
-  cp -rfvp /tmp/es/elasticsearch-$ES_VERSION . && \
+ADD https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-$ES_VERSION.tar.gz /tmp/es/
+RUN cd /tmp/es && \
+  tar zxvf /tmp/es/elasticsearch-$ES_VERSION.tar.gz && \
+  cp -rfvp /tmp/es/elasticsearch-$ES_VERSION /usr/share/ && \
   rm -rf  /tmp/es
 
 EXPOSE 9200 9300
@@ -21,9 +20,9 @@ ENV ES_HOME=/usr/share/elasticsearch-$ES_VERSION \
 
 #pagarme used plugins
 RUN $ES_HOME/bin/elasticsearch-plugin install discovery-ec2  --batch && \
-    $ES_HOME/bin/elasticsearch-plugin install repository-s3  --batch && \
+    $ES_HOME/bin/elasticsearch-plugin install repository-s3  --batch
     #consul discovery plugin, see more in https://github.com/vvanholl/elasticsearch-consul-discovery
-    $ES_HOME/bin/elasticsearch-plugin install https://github.com/claytonsilva/elasticsearch-consul-discovery/releases/download/$ES_VERSION/elasticsearch-consul-discovery-$ES_VERSION.zip --batch 
+    # $ES_HOME/bin/elasticsearch-plugin install https://github.com/claytonsilva/elasticsearch-consul-discovery/releases/download/$ES_VERSION/elasticsearch-consul-discovery-$ES_VERSION.zip --batch 
 
 #add log4j support for json
 ADD http://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.5.0/jackson-annotations-2.5.0.jar $ES_HOME/lib
