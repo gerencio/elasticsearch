@@ -11,45 +11,12 @@ Refer to https://www.elastic.co/guide/en/elasticsearch/reference/current/vm-max-
   fi
 }
 
-allocMemory() {
-  if ! [[ $ES_JAVA_OPTS =~ -Xm[s,x] ]];  then
-    totalMem=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-    if [ $PCT_HEAP_MEM -le 0 ] || [ $PCT_HEAP_MEM -ge 100 ];  then
-      echo "ERROR: Pct Heap is upper than 0 and lower than 100. (default = 75)"
-      exit 1
-    fi
-    # set elasticsearch to use PCT_HEAP_MEM % of memory host 
-    esMem=$(printf "%.0f" $( echo "scale=2; $PCT_HEAP_MEM / 100 * $totalMem" | bc ) )
-    # this is shared environment variable, then must have a export variable
-    export ES_JAVA_OPTS="$ES_JAVA_OPTS -Xms$(echo $esMem)k -Xmx$(echo $esMem)k"
-  fi
-}
-
-discoverPublishIP() {
+discoverIpFromLink() {
   dev=$1
-  if [ -n "$PROVIDER" ]; then
-    case $PROVIDER in
-      AWS)
-        OPTS="$OPTS -E network.publish_host=_ec2:privateIpv4_"
-        ;;
-      *)
-        echo "Unknown provider type. Please use AWS"
-        exit 1
-    esac
-  else 
-    # force publish to custom ip using documentation:
-    # https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-network.html
-    if [ -n "$PUBLISH_AS" ]; then
-      OPTS="$OPTS -E transport.publish_host=$(echo $PUBLISH_AS | awk -F: '{print $1}')"
-      OPTS="$OPTS -E transport.publish_port=$(echo $PUBLISH_AS | awk -F: '{if ($2) print $2; else print 9300}')"
-
-      OPTS="$OPTS -E http.publish_host=$(echo $PUBLISH_AS | awk -F: '{print $1}')"
-      OPTS="$OPTS -E http.publish_port=$(echo $PUBLISH_AS | awk -F: '{if ($2) print $2; else print 9300}')"
-    else 
-      # because documentation refer eth0 => _eth0_ for discovery ip setup
-      OPTS="$OPTS -E network.publish_host=_${dev}_"
-    fi
-  fi
+  mode=$2
+  ip=`ipaddr show dev $dev scope global|awk '$1 == "inet" { if (!match($2,"/32")) { gsub("/.*","",$2) ; print $2 } }'`
+  echo "Discovered $mode address $ip for $dev"
+  OPTS="$OPTS -E $mode.host=$ip"
 }
 
 setup_clustering() {
@@ -58,7 +25,7 @@ setup_clustering() {
     OPTS="$OPTS -E cluster.name=$CLUSTER"
     if [ -n "$CLUSTER_FROM" ]; then
       if [ -d /data/$CLUSTER_FROM -a ! -d /data/$CLUSTER ]; then
-        # echo "Performing cluster data migration from $CLUSTER_FROM to $CLUSTER"
+        echo "Performing cluster data migration from $CLUSTER_FROM to $CLUSTER"
         mv /data/$CLUSTER_FROM /data/$CLUSTER
       fi
     fi
@@ -75,45 +42,10 @@ setup_clustering() {
   if [ -n "$UNICAST_HOSTS" ]; then
     OPTS="$OPTS -E discovery.zen.ping.unicast.hosts=$UNICAST_HOSTS"
   fi
-  
-  # ec2 discovery
-  if  [ "$EC2_TAG_HOSTS" -a "$EC2_SG_HOSTS" ]; then 
-    OPTS="$OPTS -E discovery.zen.hosts_provider=ec2"
 
-    if [ -n "$EC2_REGION" ]; then
-      OPTS="$OPTS -E cloud.aws.region=$EC2_REGION"
-    fi
-
-    if [ "$EC2_TAG_KEY" -a "$EC2_TAG_VALUE" ]; then
-      OPTS="$OPTS -E  discovery.ec2.tag.$EC2_TAG_KEY=$EC2_TAG_VALUE"
-    fi
-
-    if [ -n "$EC2_SG_HOSTS" ]; then
-      OPTS="$OPTS -E  discovery.ec2.groups=$EC2_SG_HOSTS"
-    fi
-  fi
-  
-
-  #experimental feature - we have issues to solve
-  if [ -n "$CONSUL_SERVICE_NAMES" ]; then
-    OPTS="$OPTS -E discovery.zen.hosts_provider=consul -E  discovery.consul.service-names=$CONSUL_SERVICE_NAMES"
-    if [ -n "$CONSUL_SERVICE_TAG" ]; then
-      OPTS="$OPTS -E  discovery.consul.tag=$CONSUL_SERVICE_TAG"
-    fi
-    
-    # set host to consul server ( if not 172.17.0.1 (default docker0 host) )
-    if [ -n "$CONSUL_SERVICE_HOST" ]; then
-      OPTS="$OPTS -E  discovery.consul.local-ws-host=$CONSUL_SERVICE_HOST"
-    else 
-      OPTS="$OPTS -E  discovery.consul.local-ws-host=172.17.0.1"
-    fi
-    
-    # set http port to consul server ( if not 8500 )
-    if [ -n "$CONSUL_SERVICE_PORT" ]; then
-      OPTS="$OPTS -E  discovery.consul.local-ws-port=$CONSUL_SERVICE_PORT"
-    else 
-      OPTS="$OPTS -E  discovery.consul.local-ws-port=8500"
-    fi
+  if [ -n "$PUBLISH_AS" ]; then
+    OPTS="$OPTS -E transport.publish_host=$(echo $PUBLISH_AS | awk -F: '{print $1}')"
+    OPTS="$OPTS -E transport.publish_port=$(echo $PUBLISH_AS | awk -F: '{if ($2) print $2; else print 9300}')"
   fi
 
   if [ -n "$MIN_MASTERS" ]; then
@@ -122,44 +54,44 @@ setup_clustering() {
 
 }
 
-# removed for issue jar hell 
-# install_plugins() {
+install_plugins() {
 
-#   if [ -n "$PLUGINS" ]; then
-#     for p in $(echo $PLUGINS | awk -v RS=, '{print}')
-#     do
-#       # echo "Installing the plugin $p"
-#       $ES_HOME/bin/elasticsearch-plugin install $p --batch
-#     done
-#   else
-#     mkdir -p $ES_HOME/plugins
-#   fi
-# }
+  if [ -n "$PLUGINS" ]; then
+    for p in $(echo $PLUGINS | awk -v RS=, '{print}')
+    do
+      echo "Installing the plugin $p"
+      $ES_HOME/bin/elasticsearch-plugin install $p --batch
+    done
+  else
+    mkdir -p $ES_HOME/plugins
+  fi
+}
 
 setup_personality() {
 
   if [ -n "$TYPE" ]; then
     case $TYPE in
-      NO_MASTER)
-        OPTS="$OPTS -E node.master=false -E node.data=true -E node.ingest=true"
-        ;;
       MASTER)
-        OPTS="$OPTS -E node.master=true -E node.data=false -E node.ingest=false"
+        OPTS="$OPTS -E node.master=true -E node.data=false"
+        ;;
+
+      MASTER_DATA)
+        OPTS="$OPTS -E node.master=true -E node.data=true"
         ;;
       GATEWAY)
-        OPTS="$OPTS -E node.master=false -E node.data=false -E node.ingest=true"
+        OPTS="$OPTS -E node.master=false -E node.data=false"
         ;;
-      DATA)
-        OPTS="$OPTS -E node.master=false -E node.data=true -E node.ingest=false"
+
+      DATA|NON_MASTER)
+        OPTS="$OPTS -E node.master=false -E node.data=true"
         ;;
-      ALL)
-        OPTS="$OPTS -E node.master=true -E node.data=true -E node.ingest=true"
-        ;;
+
       *)
-        echo "Unknown node type. Please use MASTER|GATEWAY|DATA|NO_MASTER|ALL"
+        echo "Unknown node type. Please use MASTER|GATEWAY|DATA|NON_MASTER|MASTER_DATA|MASTER_DATA_GATEWAY"
         exit 1
     esac
   fi
+
 }
 
 pre_checks
@@ -181,24 +113,24 @@ OPTS="$OPTS \
   -E path.data=/data \
   -E path.logs=/data \
   -E transport.tcp.port=9300 \
-  -E http.port=9200 \
-  -E network.bind_host=_site_"
-discoverPublishIP $DISCOVER_IP
+  -E http.port=9200"
 
+discoverIpFromLink $DISCOVER_TRANSPORT_IP transport
+discoverIpFromLink $DISCOVER_HTTP_IP http
 
 setup_personality
 setup_clustering
-allocMemory
-# install_plugins
+install_plugins
 
 mkdir -p /conf/scripts
 
-# echo "Starting Elasticsearch with the options $OPTS"
-CMD="ES_JAVA_OPTS="\""$ES_JAVA_OPTS"\"" $ES_HOME/bin/elasticsearch $OPTS"
-if [ `id -u` = 0 ]; then
-  # echo "Running as non-root..."
-  chown -R $DEFAULT_ES_USER /data /conf
-  su -c "$CMD" $DEFAULT_ES_USER
-else
-  $CMD
-fi
+echo "Starting Elasticsearch with the options $OPTS"
+CMD="$ES_HOME/bin/elasticsearch $OPTS"
+# if [ `id -u` = 0 ]; then
+#   echo "Running as non-root..."
+#   chown -R $DEFAULT_ES_USER /data /conf
+#   su -c "$CMD" $DEFAULT_ES_USER
+# else
+#   $CMD
+# fi
+$CMD
