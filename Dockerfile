@@ -25,8 +25,8 @@ RUN $ES_HOME/bin/elasticsearch-plugin install discovery-ec2  --batch && \
     # $ES_HOME/bin/elasticsearch-plugin install https://github.com/claytonsilva/elasticsearch-consul-discovery/releases/download/$ES_VERSION/elasticsearch-consul-discovery-$ES_VERSION.zip --batch 
 
 #add log4j support for json
-ADD http://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.5.0/jackson-annotations-2.5.0.jar $ES_HOME/lib
-ADD http://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.5.3/jackson-databind-2.5.3.jar $ES_HOME/lib
+# ADD http://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-annotations/2.5.0/jackson-annotations-2.5.0.jar $ES_HOME/lib
+# ADD http://repo1.maven.org/maven2/com/fasterxml/jackson/core/jackson-databind/2.5.3/jackson-databind-2.5.3.jar $ES_HOME/lib
 
 #add java policies for plugins
 COPY java.policy $JAVA_HOME/lib/security
@@ -37,8 +37,8 @@ RUN adduser -S -s /bin/sh $DEFAULT_ES_USER && \
 
 
 #remove duplicate deps for instaled plugins 
-RUN rm -rf  /usr/share/elasticsearch-5.5.1/plugins/**/jackson-databind-* && \
-    rm -rf  /usr/share/elasticsearch-5.5.1/plugins/**/jackson-annotations-* 
+# RUN rm -rf  /usr/share/elasticsearch-$ES_VERSION/plugins/**/jackson-databind-* && \
+#     rm -rf  /usr/share/elasticsearch-$ES_VERSION/plugins/**/jackson-annotations-* 
 
 
 VOLUME ["/data","/conf"]
