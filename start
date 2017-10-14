@@ -11,6 +11,20 @@ Refer to https://www.elastic.co/guide/en/elasticsearch/reference/current/vm-max-
   fi
 }
 
+allocMemory() {
+  if ! [[ $ES_JAVA_OPTS =~ -Xm[s,x] ]];  then
+    totalMem=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    if [ $PCT_HEAP_MEM -le 0 ] || [ $PCT_HEAP_MEM -ge 100 ];  then
+      echo "ERROR: Pct Heap is upper than 0 and lower than 100. (default = 75)"
+      exit 1
+    fi
+    # set elasticsearch to use PCT_HEAP_MEM % of memory host 
+    esMem=$(printf "%.0f" $( echo "scale=2; $PCT_HEAP_MEM / 100 * $totalMem" | bc ) )
+    # this is shared environment variable, then must have a export variable
+    export ES_JAVA_OPTS="$ES_JAVA_OPTS -Xms$(echo $esMem)k -Xmx$(echo $esMem)k"
+  fi
+}
+
 discoverIpFromLink() {
   dev=$1
   mode=$2
@@ -121,6 +135,7 @@ discoverIpFromLink $DISCOVER_HTTP_IP http
 setup_personality
 setup_clustering
 install_plugins
+allocMemory
 
 mkdir -p /conf/scripts
 
