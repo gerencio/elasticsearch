@@ -31,6 +31,9 @@ discoverIpFromLink() {
   ip=`ipaddr show dev $dev scope global|awk '$1 == "inet" { if (!match($2,"/32")) { gsub("/.*","",$2) ; print $2 } }'`
   echo "Discovered $mode address $ip for $dev"
   OPTS="$OPTS -E $mode.host=$ip"
+  if [ $2 = "http" ]; then
+    echo $ip > /conf/ip
+  fi
 }
 
 setup_clustering() {
